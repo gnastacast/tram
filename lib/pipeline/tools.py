@@ -47,15 +47,25 @@ def detect_segment_track(imgfiles, out_path, thresh=0.5, min_size=None,
     Tracking: DEVA-Track-Anything. 
     """
     # ViTDet
-    cfg_path = 'data/pretrain/cascade_mask_rcnn_vitdet_h_75ep.py'
+    # cfg_path = 'data/pretrain/cascade_mask_rcnn_vitdet_h_75ep.py'
+    # cfg_path = 'data/pretrain/cascade_mask_rcnn_vitdet_b_100ep.py'
+    # cfg_path = 'data/pretrain/COCO_mask_rcnn_vitdet_b_100ep.py'
+    # cfg_path = 'data/pretrain/COCO_mask_rcnn_vitdet_l_100ep.py'
+    cfg_path = 'data/pretrain/cascade_mask_rcnn_mvitv2_b_in21k_100ep.py'
     detectron2_cfg = LazyConfig.load(str(cfg_path))
-    detectron2_cfg.train.init_checkpoint = "https://dl.fbaipublicfiles.com/detectron2/ViTDet/COCO/cascade_mask_rcnn_vitdet_h/f328730692/model_final_f05665.pkl"
+    # detectron2_cfg.train.init_checkpoint = "https://dl.fbaipublicfiles.com/detectron2/ViTDet/COCO/cascade_mask_rcnn_vitdet_h/f328730692/model_final_f05665.pkl"
+    # detectron2_cfg.train.init_checkpoint = "https://dl.fbaipublicfiles.com/detectron2/ViTDet/LVIS/cascade_mask_rcnn_vitdet_b/329226874/model_final_df306f.pkl"
+    # detectron2_cfg.train.init_checkpoint = "https://dl.fbaipublicfiles.com/detectron2/ViTDet/COCO/mask_rcnn_vitdet_b/f325346929/model_final_61ccd1.pkl" 
+    # detectron2_cfg.train.init_checkpoint = "https://dl.fbaipublicfiles.com/detectron2/ViTDet/COCO/mask_rcnn_vitdet_l/f325599698/model_final_6146ed.pkl" 
+    detectron2_cfg.train.init_checkpoint = "https://dl.fbaipublicfiles.com/detectron2/ViTDet/COCO/cascade_mask_rcnn_mvitv2_b_in21k/f325820315/model_final_8c3da3.pkl"
     for i in range(3):
         detectron2_cfg.model.roi_heads.box_predictors[i].test_score_thresh = 0.25
     detector = DefaultPredictor_Lazy(detectron2_cfg)
 
     # SAM
-    sam = sam_model_registry["vit_h"](checkpoint="data/pretrain/sam_vit_h_4b8939.pth")
+    # sam = sam_model_registry["vit_h"](checkpoint="data/pretrain/sam_vit_h_4b8939.pth")
+    # sam = sam_model_registry["vit_b"](checkpoint="data/pretrain/sam_vit_b_01ec64.pth")
+    sam = sam_model_registry["vit_l"](checkpoint="data/pretrain/sam_vit_l_0b3195.pth")
     _ = sam.to(device)
     predictor = SamPredictor(sam)
 
