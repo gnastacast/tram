@@ -11,6 +11,7 @@ from lib.pipeline.tools import video2frames, detect_segment_track
 parser = argparse.ArgumentParser()
 parser.add_argument("--video", type=str, default='./example_video.mov', help='input video')
 parser.add_argument("--visualization", action='store_true', help='save deva vos for visualization')
+parser.add_argument("--low_memory", action='store_true', help='use low-memory models (less accurate)')
 args = parser.parse_args()
 
 # File and folders
@@ -32,8 +33,10 @@ nframes = video2frames(file, img_folder)
 print('Detect, Segment, and Track ...')
 save_vos = args.visualization
 imgfiles = sorted(glob(f'{img_folder}/*.jpg'))
+low_memory = args.low_memory
 boxes_, masks_, tracks_ = detect_segment_track(imgfiles, seq_folder, thresh=0.25, 
-                                               min_size=100, save_vos=save_vos)
+                                               min_size=100, save_vos=save_vos,
+                                               low_memory=low_memory)
 np.save(f'{seq_folder}/boxes.npy', boxes_)
 np.save(f'{seq_folder}/masks.npy', masks_)
 np.save(f'{seq_folder}/tracks.npy', tracks_)
