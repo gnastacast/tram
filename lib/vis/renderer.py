@@ -7,6 +7,7 @@ import numpy as np
 from pytorch3d.renderer import (
     PerspectiveCameras,
     TexturesVertex,
+    Textures,
     PointLights,
     Materials,
     RasterizationSettings,
@@ -14,6 +15,7 @@ from pytorch3d.renderer import (
     MeshRasterizer,
     SoftPhongShader,
 )
+from pytorch3d.io import load_obj
 from pytorch3d.structures import Meshes
 from pytorch3d.structures.meshes import join_meshes_as_scene
 from pytorch3d.renderer.cameras import look_at_rotation
@@ -309,6 +311,90 @@ class Renderer():
         colors_ += [gc[..., :3]]
         mesh = create_meshes(verts_, faces_, colors_)
 
+        materials = Materials(
+            device=self.device,
+            shininess=0
+        )
+        results = self.renderer(mesh, cameras=cameras, lights=lights, materials=materials)
+        image = (results[0, ..., :3].cpu().numpy() * 255).astype(np.uint8)
+        return image
+    
+    def render_with_object_multiple(self, verts_list, faces, colors_list, cameras, lights, obj_path):
+        """
+        :param verts (B, V, 3)
+        :param faces (F, 3)
+        :param colors (B, 3)
+        """
+        # (B, V, 3), (B, F, 3), (B, V, 3)
+        verts_, faces_, colors_ = [], [], []
+        for i, verts in enumerate(verts_list):
+            colors = colors_list[[i]]
+            verts_i, faces_i, colors_i = prep_shared_geometry(verts, faces, colors)
+            if i == 0:
+                verts_ = list(torch.unbind(verts_i, dim=0))
+                faces_ = list(torch.unbind(faces_i, dim=0)) 
+                colors_ = list(torch.unbind(colors_i, dim=0))
+            else:
+                verts_ += list(torch.unbind(verts_i, dim=0))
+                faces_ += list(torch.unbind(faces_i, dim=0)) 
+                colors_ += list(torch.unbind(colors_i, dim=0)) 
+
+        # # (V, 3), (F, 3), (V, 3)
+        # gv, gf, gc = self.ground_geometry
+        # verts_ += [gv]
+        # faces_ += [gf]
+        # colors_ += [gc[..., :3]]
+        v, gf, gc = self.ground_geometry
+        
+
+        # ov, of, aux = load_obj(obj_path)
+        # print(v.shape)
+        # print(ov.shape)
+        # print(v.type())
+        # verts_ += [ov.to(self.device)]
+        # faces_ += [of.to(self.device)]
+        # colors_ += [torch.ones_like(ov)[None]] # (1, V, 3)
+        
+        # mesh = create_meshes(verts_, faces_, colors_)
+
+        verts, faces, aux = load_obj(obj_path)
+        verts_rgb = torch.ones_like(verts)[None] # (1, V, 3)
+        textures = Textures(verts_rgb=verts_rgb.to(self.device))
+        meshes = Meshes(verts=[verts.to(self.device)],
+                        faces=[faces.verts_idx.to(self.device)],
+                        textures=textures)
+        
+        mesh = join_meshes_as_scene(meshes)
+
+        materials = Materials(
+            device=self.device,
+            shininess=0
+        )
+        results = self.renderer(mesh, cameras=cameras)#, lights=lights, materials=materials)
+        image = (results[0, ..., :3].cpu().numpy() * 255).astype(np.uint8)
+        return image
+    
+    def render_multiple(self, verts_list, faces, colors_list, cameras, lights):
+        """
+        :param verts (B, V, 3)
+        :param faces (F, 3)
+        :param colors (B, 3)
+        """
+        # (B, V, 3), (B, F, 3), (B, V, 3)
+        verts_, faces_, colors_ = [], [], []
+        for i, verts in enumerate(verts_list):
+            colors = colors_list[[i]]
+            verts_i, faces_i, colors_i = prep_shared_geometry(verts, faces, colors)
+            if i == 0:
+                verts_ = list(torch.unbind(verts_i, dim=0))
+                faces_ = list(torch.unbind(faces_i, dim=0)) 
+                colors_ = list(torch.unbind(colors_i, dim=0))
+            else:
+                verts_ += list(torch.unbind(verts_i, dim=0))
+                faces_ += list(torch.unbind(faces_i, dim=0)) 
+                colors_ += list(torch.unbind(colors_i, dim=0)) 
+        
+        mesh = create_meshes(verts_, faces_, colors_)
         materials = Materials(
             device=self.device,
             shininess=0

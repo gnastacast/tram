@@ -51,6 +51,7 @@ locations = []
 ##### TRAM + VIMO #####
 pred_cam = dict(np.load(f'{seq_folder}/masked_droid_slam.npz', allow_pickle=True))
 img_focal = pred_cam['img_focal'].item()
+print(np.array(pred_cam['traj'].shape))
 
 for i in range(max_track):
     hps_file = hps_files[i]
@@ -73,11 +74,11 @@ for i in range(max_track):
     pred_vert = pred.vertices
     pred_j3d = pred.joints[:, :24]
 
-    pred_traj = pred_cam['traj']
+    pred_traj = np.array(pred_cam['traj']).astype(np.float32)
     pred_camt = torch.tensor(pred_traj[frame, :3]) * pred_cam['scale']
     pred_camq = torch.tensor(pred_traj[frame, 3:])
     pred_camr = quaternion_to_matrix(pred_camq[:,[3,0,1,2]])
-
+    print(type(pred_camr), type(pred_vert))
     pred_vert_w = torch.einsum('bij,bnj->bni', pred_camr, pred_vert) + pred_camt[:,None]
     pred_j3d_w = torch.einsum('bij,bnj->bni', pred_camr, pred_j3d) + pred_camt[:,None]
     pred_vert_w, pred_j3d_w = traj_filter(pred_vert_w, pred_j3d_w)
@@ -91,7 +92,7 @@ for i in range(max_track):
 ##### Fit to Ground #####
 grounding_verts = []
 grounding_joints = []
-for t in tstamp[:10] + tstamp[-10:]:
+for t in tstamp[250:300]: # tstamp[:10] + tstamp[-10:]:
     verts = torch.stack(track_verts[t])
     joints = torch.stack(track_joints[t])
     grounding_verts.append(verts)
@@ -111,10 +112,11 @@ scale = max(sx.item(), sz.item()) * 2
 
 ##### Viewing Camera #####
 pred_cam = dict(np.load(f'{seq_folder}/masked_droid_slam.npz', allow_pickle=True))
-pred_traj = pred_cam['traj']
-pred_camt = torch.tensor(pred_traj[:, :3]) * pred_cam['scale']
+pred_traj = np.array(pred_cam['traj']).astype(np.float32)
+pred_camt = torch.tensor(pred_traj[:, :3]) * np.float32(pred_cam['scale'])
 pred_camq = torch.tensor(pred_traj[:, 3:])
 pred_camr = quaternion_to_matrix(pred_camq[:,[3,0,1,2]])
+
 
 cam_R = torch.einsum('ij,bjk->bik', R, pred_camr)
 cam_T = torch.einsum('ij,bj->bi', R, pred_camt) - offset
@@ -125,16 +127,16 @@ cam_R = cam_R.to('cuda')
 cam_T = cam_T.to('cuda')
 
 ##### Render video for visualization #####
-writer = imageio.get_writer(f'{seq_folder}/tram_output.mp4', fps=30, mode='I', 
+writer = imageio.get_writer(f'{seq_folder}/tram_output_short.mp4', fps=30, mode='I', 
                             format='FFMPEG', macro_block_size=1)
-bin_size = 64
+bin_size = 64 * 2
 max_faces_per_bin = 20000
 img = cv2.imread(imgfiles[0])
 renderer = Renderer(img.shape[1], img.shape[0], img_focal-100, 'cuda', 
                     smpl.faces, bin_size=bin_size, max_faces_per_bin=max_faces_per_bin)
 renderer.set_ground(scale, cx.item(), cz.item())
 
-for i in tqdm(range(len(imgfiles))):
+for i in tqdm(range(250,300)):
     img = cv2.imread(imgfiles[i])[:,:,::-1]
     
     verts_list = track_verts[i]
@@ -142,6 +144,9 @@ for i in tqdm(range(len(imgfiles))):
         verts_list = torch.stack(track_verts[i])#[:,None]
         verts_list = torch.einsum('ij,bnj->bni', R, verts_list)[:,None]
         verts_list -= offset
+        # print(verts_list[0:10])
+        # print(np.sum(np.isclose(verts,0)))
+        # quit()
         verts_list = verts_list.to('cuda')
         
         tid = track_tid[i]
@@ -149,8 +154,13 @@ for i in tqdm(range(len(imgfiles))):
 
     faces = renderer.faces.clone().squeeze(0)
     cameras, lights = renderer.create_camera_from_cv(cam_R[[i]], cam_T[[i]])
-    rend = renderer.render_with_ground_multiple(verts_list, faces, verts_colors, 
-                                                cameras, lights)
+
+    # try:
+    rend = renderer.render_with_object_multiple(verts_list, faces, verts_colors, 
+                                                cameras, lights, f'{seq_folder}/roomDanceTrackingBg.obj')
+    # except ValueError as e:
+    #     print(e)
+    #     rend = img
     
     out = np.concatenate([img, rend], axis=1)
     writer.append_data(out)
